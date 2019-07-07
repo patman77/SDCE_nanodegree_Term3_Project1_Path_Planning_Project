@@ -103,8 +103,6 @@ int main() {
           //  car_s = end_path_s;
           //}
 
-          vector<double> next_x_vals;
-          vector<double> next_y_vals;
 
           /**
            * TODO: define a path made up of (x,y) points that the car will visit
@@ -189,6 +187,9 @@ int main() {
             // set (x,y) points to the spline
             s.set_points(ptsx, ptsy);
 
+            vector<double> next_x_vals;
+            vector<double> next_y_vals;
+
             // start with all of the previous path points from last time
             for(int i=0; i<previous_path_x.size(); i++)
             {
@@ -225,11 +226,23 @@ int main() {
               next_x_vals.push_back(x_point);
               next_y_vals.push_back(y_point);
             }
+            json msgJson;
+
+            msgJson["next_x"] = next_x_vals;
+            msgJson["next_y"] = next_y_vals;
+
+            auto msg = "42[\"control\","+ msgJson.dump()+"]";
+
+            ws.send(msg.data(), msg.length(), uWS::OpCode::TEXT);
+
           }
 
           if(l_algo != ALGO_BETTER_FOLLOW_WAYPOINTS)
           {
             double dist_inc = 0.3;
+            vector<double> next_x_vals;
+            vector<double> next_y_vals;
+
             for(int i=0; i<50; i++)
             {
               double next_s = car_s + (i+1)*dist_inc;
@@ -248,20 +261,19 @@ int main() {
               }
               else if(l_algo == ALGO_BETTER_FOLLOW_WAYPOINTS)
               {
-
               }
-
             }
+            json msgJson;
+
+            msgJson["next_x"] = next_x_vals;
+            msgJson["next_y"] = next_y_vals;
+
+            auto msg = "42[\"control\","+ msgJson.dump()+"]";
+
+            ws.send(msg.data(), msg.length(), uWS::OpCode::TEXT);
+
           }
 
-          json msgJson;
-
-          msgJson["next_x"] = next_x_vals;
-          msgJson["next_y"] = next_y_vals;
-
-          auto msg = "42[\"control\","+ msgJson.dump()+"]";
-
-          ws.send(msg.data(), msg.length(), uWS::OpCode::TEXT);
         }  // end "telemetry" if
       } else {
         // Manual driving
