@@ -303,7 +303,7 @@ int main() {
                 ref_vel = MAX_A;
               }
 
-              double N = (target_dist/(.02*ref_vel)/2.24);  // convert from mph to m/s
+              double N = (target_dist / (.02*ref_vel / 2.24));  // convert from mph to m/s
               double x_point = x_add_on+(target_x)/N;
               double y_point = s(x_point);
 
