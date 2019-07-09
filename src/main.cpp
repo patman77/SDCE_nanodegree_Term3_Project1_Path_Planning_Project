@@ -60,7 +60,8 @@ int main() {
     int lane = 1;
 
     // Have a referene velocity to target
-    double ref_vel = 49.5;
+    //double ref_vel = 49.5;
+    double ref_vel = 0.0;
 
     // "42" at the start of the message means there's a websocket message event.
     // The 4 signifies a websocket message
@@ -98,7 +99,7 @@ int main() {
 
           int prev_size = previous_path_x.size();
 
-          // lane change section
+          // collision avoidance section
           if(prev_size > 0)
           {
             car_s = end_path_s;
@@ -106,10 +107,33 @@ int main() {
           bool too_close = false;
           
           // find ref_v to use
+          bool car_on_front = false;
+          bool car_on_left = false;
+          bool car_on_right = false;
+
+          int FIRST_LANE_START = 0;
+          int FIRST_LANE_END = 4;
+          int SECOND_LANE_END = 8;
+          int THIRD_LANE_END = 12;
+          int THIRTY_AHEAD = 30;
+
           for(int i=0; i<sensor_fusion.size(); i++)
           {
-            // car is in my lane
+            // Car is in my lane ??
             float d = sensor_fusion[i][6];
+            int car_lane = -1;
+            // IS car on saem lane as we are ?
+            if ( d > FIRST_LANE_START && d < FIRST_LANE_END ) {
+              car_lane = 0;
+            } else if ( d > FIRST_LANE_END && d < SECOND_LANE_END ) {
+              car_lane = 1;
+            } else if ( d > SECOND_LANE_END && d < THIRD_LANE_END ) {
+              car_lane = 2;
+            }
+            // bad case
+            if (car_lane < 0) {
+              continue;
+            }
             if(d<(2+4*lane+2) && d>(2+4*lane-2))
             {
               double vx = sensor_fusion[i][3];
@@ -118,6 +142,17 @@ int main() {
               double check_car_s = sensor_fusion[i][5];
               
               check_car_s += (static_cast<double>(prev_size)*0.02*check_speed);
+
+              if ( car_lane == lane ) {
+                // The car is in our lane.
+                car_on_front |= check_car_s > car_s && check_car_s - car_s < THIRTY_AHEAD;
+              } else if ( car_lane - lane == -1 ) {
+                // The car is on left
+                car_on_left |= car_s - THIRTY_AHEAD < check_car_s && car_s + THIRTY_AHEAD > check_car_s;
+              } else if ( car_lane - lane == 1 ) {
+                // The car is on right
+                car_on_right |= car_s - THIRTY_AHEAD < check_car_s && car_s + THIRTY_AHEAD > check_car_s;
+              }
               // s values greater than mine and s gap
               if((check_car_s > car_s) && ((check_car_s-car_s)<30))
               {
@@ -127,14 +162,34 @@ int main() {
               }
             }
           }
-          
+
+          double diff_speed = 0;
+          const double MAX_V = 49.5;
+          const double MAX_A = .224;
           if(too_close)
           {
-            ref_vel -= .224;
+            if(!car_on_left && lane >0)
+            {
+              lane--;
+            }
+            else if(!car_on_right && lane != 2)
+            {
+              lane++;
+            }
+            else {
+              diff_speed -= MAX_A;
+            }
           }
-          else if(ref_vel < 49.5)
+          else
           {
-            ref_vel += .224;
+            if ( lane != 1 ) { // If not on center lane.
+              if ( ( lane == 0 && !car_on_right ) || ( lane == 2 && !car_on_left ) ) {
+                lane = 1; // So, get back to center.
+              }
+            }
+            if ( ref_vel < MAX_V ) {
+              diff_speed += MAX_A;
+            }
           }
 
           /**
@@ -143,6 +198,7 @@ int main() {
            */
           // 1st test from the course: drive straight ahead
           // 2nd test: follow waypoints in a simple manner
+          // 3rd test: follow waypoints on a spline curve, continously connected to the previous trajectory
           enum { ALGO_STRAIGHT = 0,
                  ALGO_JUST_FOLLOW_WAYPOINTS = 1,
                  ALGO_BETTER_FOLLOW_WAYPOINTS = 2
@@ -240,6 +296,13 @@ int main() {
             // fill up rest of path planner after filling it with prev points, here always output 50 points
             for(int i=1; i<=50-previous_path_x.size(); i++)
             {
+              ref_vel += diff_speed;
+              if ( ref_vel > MAX_V ) {
+                ref_vel = MAX_V;
+              } else if ( ref_vel < MAX_A ) {
+                ref_vel = MAX_A;
+              }
+
               double N = (target_dist/(.02*ref_vel)/2.24);  // convert from mph to m/s
               double x_point = x_add_on+(target_x)/N;
               double y_point = s(x_point);
