@@ -335,13 +335,15 @@ int main() {
 
           if(l_algo != ALGO_BETTER_FOLLOW_WAYPOINTS)
           {
-            double dist_inc = 0.3;
+            double dist_inc = 0.3; // spacing between points which are traversed every 0.2 seconds
             vector<double> next_x_vals;
             vector<double> next_y_vals;
 
             for(int i=0; i<50; i++)
             {
               double next_s = car_s + (i+1)*dist_inc;
+              // we are in the middle lane, measured from the yellow lane separating towards the oncoming traffic
+              // lane width is 4.0, and the waypoints are in the middle of the middle lane, i.e. 4.0 + 4.0 / 2.0 = 6.0
               double next_d = 6.0;
               vector<double> xy = getXY(next_s, next_d, map_waypoints_s, map_waypoints_x, map_waypoints_y);
 
