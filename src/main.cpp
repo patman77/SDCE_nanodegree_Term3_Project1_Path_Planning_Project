@@ -57,7 +57,7 @@ int main() {
               (uWS::WebSocket<uWS::SERVER> ws, char *data, size_t length,
                uWS::OpCode opCode) {
                 // start in ian
-    int lane = 1;
+    int lane = 1; // 1 is middle lane, 0 ist left lane, 2 right lane
 
     // Have a referene velocity to target
     //double ref_vel = 49.5;
