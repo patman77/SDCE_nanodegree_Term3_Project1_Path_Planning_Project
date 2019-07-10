@@ -165,7 +165,7 @@ int main() {
                 }
               }
             }
-          }
+          } // for(int i
 
           double diff_speed = 0;
           const double MAX_V = 49.5;
@@ -184,7 +184,7 @@ int main() {
               diff_speed -= MAX_A;
             }
           }
-          else if ( ref_vel < MAX_V ) {
+          else if ( ref_vel < MAX_V )
           {
             diff_speed += MAX_A;
             if ( lane != 1 ) { // If not on center lane.
