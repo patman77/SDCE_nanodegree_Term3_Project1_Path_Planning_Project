@@ -97,7 +97,7 @@ int main() {
           //   of the road.
           auto sensor_fusion = j[1]["sensor_fusion"]; // this is vector<vector<double>>
 
-          int prev_size = previous_path_x.size();
+          int prev_size = previous_path_x.size(); // last path the car was following
 
           // collision avoidance section
           if(prev_size > 0)
@@ -141,7 +141,7 @@ int main() {
               double check_speed = sqrt(vx*vx+vy*vy);
               double check_car_s = sensor_fusion[i][5];
               
-              check_car_s += (static_cast<double>(prev_size)*0.02*check_speed);
+              check_car_s += (static_cast<double>(prev_size)*0.02*check_speed); // preview into the future
 
               if ( car_lane == lane ) {
                 // The car is in our lane.
@@ -159,13 +159,17 @@ int main() {
                 // lower reference vel in order not to crash into the front car
                 //ref_vel = 29.5;
                 too_close = true;
+                if(lane > 0) // first rude lane change strategy from the path planning walkthrough 
+                {
+                  lane = 0;
+                }
               }
             }
           }
 
           double diff_speed = 0;
           const double MAX_V = 49.5;
-          const double MAX_A = .224;
+          const double MAX_A = .224; // 5 m/s^2, below 10 m/s^2
           if(too_close)
           {
             if(!car_on_left && lane >0)
@@ -180,15 +184,13 @@ int main() {
               diff_speed -= MAX_A;
             }
           }
-          else
+          else if ( ref_vel < MAX_V ) {
           {
+            diff_speed += MAX_A;
             if ( lane != 1 ) { // If not on center lane.
               if ( ( lane == 0 && !car_on_right ) || ( lane == 2 && !car_on_left ) ) {
                 lane = 1; // So, get back to center.
               }
-            }
-            if ( ref_vel < MAX_V ) {
-              diff_speed += MAX_A;
             }
           }
 
