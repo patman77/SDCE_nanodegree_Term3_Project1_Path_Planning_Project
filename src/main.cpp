@@ -14,6 +14,12 @@ using nlohmann::json;
 using std::string;
 using std::vector;
 
+// Have a referene velocity to target
+//double ref_vel = 49.5;
+double ref_vel = 0.0;
+int lane = 1; // 1 is middle lane, 0 ist left lane, 2 right lane
+
+
 int main() {
   uWS::Hub h;
 
@@ -51,17 +57,13 @@ int main() {
     map_waypoints_dy.push_back(d_y);
   }
 
-
   h.onMessage([&map_waypoints_x,&map_waypoints_y,&map_waypoints_s,
                &map_waypoints_dx,&map_waypoints_dy]
               (uWS::WebSocket<uWS::SERVER> ws, char *data, size_t length,
                uWS::OpCode opCode) {
                 // start in ian
-    int lane = 1; // 1 is middle lane, 0 ist left lane, 2 right lane
 
-    // Have a referene velocity to target
-    //double ref_vel = 49.5;
-    double ref_vel = 0.0;
+    printf("\nmy current lane=%d, my speed=%f\n", lane, ref_vel);
 
     // "42" at the start of the message means there's a websocket message event.
     // The 4 signifies a websocket message
@@ -108,90 +110,135 @@ int main() {
           
           // find ref_v to use
           bool car_on_front = false;
-          bool car_on_left = false;
+          bool car_on_left  = false;
           bool car_on_right = false;
+          bool car_on_left_behind  = false;
+          bool car_on_right_behind = false;
 
-          int FIRST_LANE_START = 0;
-          int FIRST_LANE_END = 4;
-          int SECOND_LANE_END = 8;
-          int THIRD_LANE_END = 12;
-          int THIRTY_AHEAD = 30;
+          double max_speed = -999999.0;
+          double min_speed =  999999.0;
+
+          enum {
+            LEFT_LANE   = 0,
+            MIDDLE_LANE = 1,
+            RIGHT_LANE  = 2
+          };
+          const int LANE_WIDTH = 4;
+          const int HALF_LANE_WIDTH = 2;
+          const int LEFT_LANE_LEFT    = 0;
+          const int LEFT_LANE_RIGHT   = 4;
+          const int MIDDLE_LANE_RIGHT = 8;
+          const int RIGHT_LANE_RIGHT  = 12;
+          const int THIRTY_AHEAD      = 30;
 
           for(int i=0; i<sensor_fusion.size(); i++)
           {
-            // Car is in my lane ??
+            // determine other car's lane in frenet coordinates
             float d = sensor_fusion[i][6];
             int car_lane = -1;
             // IS car on saem lane as we are ?
-            if ( d > FIRST_LANE_START && d < FIRST_LANE_END ) {
-              car_lane = 0;
-            } else if ( d > FIRST_LANE_END && d < SECOND_LANE_END ) {
-              car_lane = 1;
-            } else if ( d > SECOND_LANE_END && d < THIRD_LANE_END ) {
-              car_lane = 2;
+            if ( d > LEFT_LANE_LEFT && d < LEFT_LANE_RIGHT ) {
+              car_lane = LEFT_LANE;
+            } else if ( d > LEFT_LANE_RIGHT && d < MIDDLE_LANE_RIGHT ) {
+              car_lane = MIDDLE_LANE;
+            } else if ( d > MIDDLE_LANE_RIGHT && d < RIGHT_LANE_RIGHT ) {
+              car_lane = RIGHT_LANE;
             }
             // bad case
-            if (car_lane < 0) {
+            if (car_lane < LEFT_LANE_LEFT || car_lane > RIGHT_LANE_RIGHT ) {
               continue;
             }
-            if(d<(2+4*lane+2) && d>(2+4*lane-2))
-            {
               double vx = sensor_fusion[i][3];
               double vy = sensor_fusion[i][4];
               double check_speed = sqrt(vx*vx+vy*vy);
               double check_car_s = sensor_fusion[i][5];
               
               check_car_s += (static_cast<double>(prev_size)*0.02*check_speed); // preview into the future
+              if(check_car_s<car_s)
+              {
+                printf("BEHIND CAR, distance=%f, car_lane=%d, v=%f\n", check_car_s-car_s, car_lane, check_speed);
+              }
+              else
+              {
+                printf("IN FRONT CAR, distance=%f, car_lane=%d, v=%f\n",check_car_s-car_s, car_lane, check_speed);
+                if(car_lane < lane && check_car_s-car_s < 2.0*THIRTY_AHEAD) // cars to the left and not too far? collect their speeds ?
+                {
+                  max_speed = std::max(max_speed, check_speed);
+                  min_speed = std::min(min_speed, check_speed);
+                }
+              }
+//              if(d<(HALF_LANE_WIDTH+LANE_WIDTH*lane+HALF_LANE_WIDTH) &&
+//                 d>(HALF_LANE_WIDTH+LANE_WIDTH*lane-HALF_LANE_WIDTH)) // other car in same lane?
+//              {
 
-              if ( car_lane == lane ) {
-                // The car is in our lane.
+                if ( car_lane == lane ) {
+                // The other car is in our lane.
                 car_on_front |= check_car_s > car_s && check_car_s - car_s < THIRTY_AHEAD;
-              } else if ( car_lane - lane == -1 ) {
+              } else if ( lane - car_lane == 1 ) {
                 // The car is on left
-                car_on_left |= car_s - THIRTY_AHEAD < check_car_s && car_s + THIRTY_AHEAD > check_car_s;
+                car_on_left        |= car_s + THIRTY_AHEAD > check_car_s;
+                car_on_left_behind |= car_s - THIRTY_AHEAD < check_car_s;
               } else if ( car_lane - lane == 1 ) {
                 // The car is on right
-                car_on_right |= car_s - THIRTY_AHEAD < check_car_s && car_s + THIRTY_AHEAD > check_car_s;
+                car_on_right        |= car_s + THIRTY_AHEAD > check_car_s;
+                car_on_right_behind |= car_s - THIRTY_AHEAD < check_car_s;
               }
               // s values greater than mine and s gap
-              if((check_car_s > car_s) && ((check_car_s-car_s)<30))
+              if(car_on_front)
               {
                 // lower reference vel in order not to crash into the front car
                 //ref_vel = 29.5;
+                //printf("setting too_close to true\n");
                 too_close = true;
-                if(lane > 0) // first rude lane change strategy from the path planning walkthrough 
-                {
-                  lane = 0;
-                }
               }
-            }
-          } // for(int i
+              else
+              {
+                //printf("setting too_close to false\n");
+                too_close = false;
+              }
+            //}
+          } // traverse sensor fusion data, i.e. distances to other cars
 
           double diff_speed = 0;
           const double MAX_V = 49.5;
           const double MAX_A = .224; // 5 m/s^2, below 10 m/s^2
+          //behaviour part
           if(too_close)
           {
-            if(!car_on_left && lane >0)
+            // too close and left lane is free?
+            if(!car_on_left && !car_on_left_behind && lane > LEFT_LANE)
             {
               lane--;
             }
-            else if(!car_on_right && lane != 2)
+            // right side free and not yet on the right side? then go to the right side
+            else if(!car_on_right && !car_on_left_behind && lane != RIGHT_LANE)
             {
               lane++;
             }
+            // no other choice, just decelerate
             else {
-              diff_speed -= MAX_A;
+              printf("too_close, and no maneuver possible, decelarating \n");
+              ref_vel -= MAX_A;
             }
           }
           else if ( ref_vel < MAX_V )
           {
-            diff_speed += MAX_A;
-            if ( lane != 1 ) { // If not on center lane.
-              if ( ( lane == 0 && !car_on_right ) || ( lane == 2 && !car_on_left ) ) {
-                lane = 1; // So, get back to center.
+            //printf("not too_close and too slow, accelarating, ref_vel before %f\n", ref_vel);
+            printf("ref_vel=%f, min_speed=%f\n", ref_vel, min_speed);
+            ref_vel += MAX_A;
+            //printf("not too_close and too slow, accelarating, ref_vel after %f\n", ref_vel);
+            // drive on the right side if possible (germany!),
+            // do this only when no other maneuver has been started
+            if(lane != RIGHT_LANE)
+            {
+              if(!car_on_right && !car_on_right_behind)
+              {
+                lane++;
               }
             }
+            // cars slower to the left side? then slow down not to overtake on the right side
+            if(min_speed < ref_vel)
+              ref_vel -= MAX_A;
           }
 
           /**
@@ -298,7 +345,7 @@ int main() {
             // fill up rest of path planner after filling it with prev points, here always output 50 points
             for(int i=1; i<=50-previous_path_x.size(); i++)
             {
-              ref_vel += diff_speed;
+              //ref_vel += diff_speed;
               if ( ref_vel > MAX_V ) {
                 ref_vel = MAX_V;
               } else if ( ref_vel < MAX_A ) {
