@@ -69,6 +69,21 @@ the path has processed since last time.
 
 A really helpful resource for doing this project and creating smooth trajectories was using http://kluge.in-chemnitz.de/opensource/spline/, the spline function is in a single hearder file is really easy to use.
 
+## Description
+
+I implemented the waypoint following according to the walkthrough by using the above spline library.
+Additionally, I added a lane change behaviour. Whenever the car in front of me gets too close (<30), I apply the following rules:
+* if no one is on the left side (either in front or behind), change to the left lane
+* or, if that is not possible, do the same to the right side
+* otherwise, slow down
+
+In addition, own velocity is kept below the maximum speed of 49.5. There are some German rules which I added:
+* always stick to the rightmost lane
+* do not overtake other cars to the left of oneself
+These rules were checked and corrected after all other maneuvers in order not to interfere. Sometimes (especially in the beginning), it happens that a car from behind collided me, but I don't count that as my fault, this other car should have slowed down.
+
+With these behaviours, I could drive safely for 4.6 miles.
+
 ---
 
 ## Dependencies
